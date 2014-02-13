@@ -1,0 +1,40 @@
+/* charset=utf8; */
+
+body { width:1220px; margin:0 auto; }
+p, form, ul, li { margin:0 }
+
+.notice { width:800px; margin:20px auto; line-height:1.8em; }
+.onlines { float:left; width:200px; margin:40px 80px; border:1px solid #CCC; padding:10px 20px; }
+.main { float:left; width:602px; margin:40px 100px; border:1px solid #CCC; }
+
+.onlines span { display:inline-block; height:40px; line-height:40px; margin:0 10px; font-weight:bold; color:green; cursor:pointer; }
+
+
+.header { width:100%; height:40px; line-height:40px; border-bottom:1px solid #CCC; }
+.logo { float:left; width:150px; padding:0 50px; font-weight:bold; height:40px; }
+.user { float:left; width:250px; padding:0 50px; text-align:right; height:40px; }
+#user_sign input { line-height:40px; height:40px; }
+
+
+.users { float:left; width:140px; border-right:1px solid #CCC; height:400px; }
+.users ul { list-style:none; padding:0; }
+.users li { list-style:none; height:36px; line-height:36px; border-bottom:1px solid #DDD; padding:0 10px; cursor:pointer; }
+.users li.on { background-color:#cdf; font-weight:bold; }
+.users li.online { color:blue; }
+
+
+.chat { float:left; width:460px; }
+
+.messages { width:100%; height:360px; overflow-y:scroll; }
+.messages div { float:left; width: 300px; border:1px solid #DDD; padding:5px 20px; margin:5px; }
+.messages div.self { float:right; }
+.messages div p:first-child { font-size:9px; }
+.messages .u { float:left; color:#AAA; }
+.messages .t { float:right; color:#CCC; }
+.messages div p:last-child { font-size:14px; clear:both; line-height:24px; }
+
+
+.publish { border-top:1px solid #CCC; }
+.publish input { width:340px; height:40px; float:left; }
+.publish button { width:80px; height:30px; margin:5px 20px; float:left; }
+
