@@ -35,8 +35,11 @@ function sign()
 
     local user = loader:model('ruser')
     local sid = user:sign(username)
-    user:group_join(sid, default_group)
     user:close()
+
+    local group = loader:model('rgroup')
+    group:join(sid, default_group)
+    group:close()
 
     local chat = loader:model('chat')
     local res, err = chat:send(sid, default_group, default_mesg .. username, username, default_group_name)

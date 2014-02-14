@@ -12,7 +12,6 @@ local _M = getfenv()
 
 local config = get_instance().loader:config('redis')
 local user_hash_list = config.user_hash_list
-local group_pref = config.group_pref
 
 function new(self)
     return setmetatable({
@@ -29,34 +28,55 @@ function sign(self, username)
     return sid
 end
 
--- sid: string or table
-function get(self, sid)
+-- uid: string or table
+function get(self, uid)
     local red = self.red
 
-    if type(sid) == "string" then
-        return red:hget(user_hash_list, sid)
+    if type(uid) == "string" then
+        local res = red:hget(user_hash_list, uid)
+        return res ~= ngx_null and res or ''
     end
 
     local ret = {}
 
-    if #sid > 0 then
-        local names = red:hmget(user_hash_list, unpack(sid))
+    if #uid > 0 then
+        local uids, groups = {}, {}
 
-        for i = 1, #sid do
-            ret[sid[i]] = names[i]
+        for i = 1, #uid do
+            if str_sub(uid[i], 1, #group_pref) ~= group_pref then
+                uids[#uids + 1] = uid[i]
+            else
+                groups[#groups + 1] = uid[i]
+            end
+        end
+
+        if #uids > 0 then
+            ret = gets(self, uids)
+        end
+
+        if #groups > 0 then
+            local group = get_instance().loader:model('rgroup')
+            groupnames = group:gets(groups)
+            group:close()
+
+            for k, v in pairs(groupnames) do
+                ret[k] = v
+            end
         end
     end
     return ret
 end
 
-function groups(self, uid)
-    local ret = self.red:smembers(group_pref .. uid)
+function gets(self, uids)
+    local red, ret = self.red, {}
 
-    return ret ~= ngx_null and ret or {}
-end
+    local names = red:hmget(user_hash_list, unpack(uids))
 
-function group_join(self, uid, gid)
-    return self.red:sadd(group_pref .. uid, gid)
+    for i = 1, #uids do
+        ret[uids[i]] = names and names[i] or ''
+    end
+
+    return ret
 end
 
 function close(self)

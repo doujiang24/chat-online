@@ -20,6 +20,9 @@ delay_pref  =   "delay:"    -- list     pref:uid:client     expire: max_network_
 online_pref =   "online:"   -- hash     pref:uid client timestamp
 
 group_pref =    "group:"    -- group    pref:uid gid    sets
+group_name_hash     =   "group_name"    -- groupname    hash
+group_user_pref     =   "gusr:"         -- group user   sets
+user_group_pref     =   "ugrp:"         -- user group   sets
 
 max_network_delay = 10
 longpoll_timeout = 30       -- 30 second

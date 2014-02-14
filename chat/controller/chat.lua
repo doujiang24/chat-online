@@ -35,9 +35,9 @@ function websocket()
     local uid, client = gets.uid, gets.client
     dp.uid, dp.client = uid, client
 
-    local user = loader:model('ruser')
-    local groups = user:groups(uid)
-    user:close()
+    local rgroup = loader:model('rgroup')
+    local groups = rgroup:groups(uid)
+    rgroup:close()
 
     local rchat = loader:model('rchat', uid, groups)
 
@@ -140,9 +140,9 @@ function back_hold(premature, uid, client, dp)
     ngx.ctx.dp = dp
     local loader = get_instance().loader
 
-    local user = loader:model('ruser')
-    local groups = user:groups(uid)
-    user:close()
+    local rgroup = loader:model('rgroup')
+    local groups = rgroup:groups(uid)
+    rgroup:close()
 
     local rchat = loader:model('rchat', uid, groups)
     while true do
@@ -189,34 +189,6 @@ function send()
     end
 
     return output.json_callback(callback, 1)
-end
-
-
-function message(contact, id)
-    local mchat = loader:model('mchat')
-
-    local sid = get_instance().session:get('sid')
-    local data, err = mchat:list(sid, contact, id)
-
-    output.json(1, data)
-end
-
-function contact()
-    local rchat = loader:model('rchat')
-
-    local sid = get_instance().session:get('sid')
-    local data, err = rchat:contact(sid)
-
-    output.json(1, data)
-end
-
-function online()
-    local users = get_instance().request:post('user')
-
-    local rchat = loader:model('rchat')
-    local data, err = rchat:online(users)
-
-    output.json(1, data)
 end
 
 function onall()

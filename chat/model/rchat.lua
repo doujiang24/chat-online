@@ -7,6 +7,7 @@ local setmetatable = setmetatable
 local ipairs = ipairs
 local pairs = pairs
 local tonumber = tonumber
+local str_sub = string.sub
 local get_instance = get_instance
 local ngx_null = ngx.null
 local json_encode = cjson.encode
@@ -29,48 +30,15 @@ local delay_pref = config.delay_pref
 local online_pref = config.online_pref
 local max_network_delay = config.max_network_delay
 local longpoll_timeout = config.longpoll_timeout
+local group_pref = config.group_pref
 
 local hold_init_value = "1"
 local hold_value = "2"
 
-function new(self, uid, groups)
-    local red, chs = redis:connect(config), nil
-
-    if uid then
-        chs = { channel_pref .. uid }
-
-        if groups then
-            for _i, g in ipairs(groups) do
-                chs[#chs + 1] = channel_pref .. g
-            end
-        end
-
-        get_instance().debug:log_debug('subscribe', unpack(chs))
-        red:subscribe(unpack(chs))
-        red:set_timeout(subscribe_timeout)
-    end
-
+function new(self)
     return setmetatable({
-        red = red,
-        uid = uid,
-        groups = groups,
-        chs = chs,
+        red = redis:connect(config),
     }, { __index = _M } )
-end
-
-function subscribe(self, timeout)
-    local red = self.red
-
-    if timeout then
-        red:set_timeout(timeout)
-    end
-
-    local data, err = red:read_reply()
-    if data and data ~= ngx_null then
-        return data and data[3]
-    end
-
-    return nil, err
 end
 
 function publish(self, channel, data)
@@ -108,7 +76,15 @@ function send(self, id, sender, acceptor, message, sender_username, acceptor_use
     local res = red:commit_pipeline()
 
     -- unread
-    unread(self, acceptor, sender, 'incr')
+    if str_sub(acceptor, 1, #group_pref) ~= group_pref then
+        unread(self, acceptor, sender, 'incr')
+    else
+        local group = get_instance().loader:model('rgroup')
+        local users = group:users(acceptor)
+        for i = 1, #users do
+            unread(self, users[i], acceptor, 'incr')
+        end
+    end
 
     return res
 end
@@ -297,12 +273,5 @@ function connect(self, uid, client)
 end
 
 function close(self)
-    local red, chs = self.red, self.chs
-
-    if chs then
-        red:unsubscribe(unpack(chs))
-        get_instance().debug:log_debug('unsubscribe', unpack(chs))
-    end
-
-    return red:keepalive()
+    return self.red:keepalive()
 end
