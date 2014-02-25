@@ -16,9 +16,21 @@
         <p> 支持群聊，登录后会自动加入默认群 </p>
     </div>
 
-    <div class="onlines">
-        <h3>在线用户</h3>
-        <div></div>
+    <div class="left">
+        <div class="onlines">
+            <h3>在线用户</h3>
+            <div></div>
+        </div>
+
+        <div class="groups">
+            <h3>聊天群组</h3>
+            <div></div>
+
+            <form id="groupadd">
+                <input type="text" name="groupname">
+                <input type="button" value="创建群组">
+            </form>
+        </div>
     </div>
 
     <div class="main">
@@ -26,12 +38,25 @@
             <div class="logo">
                 即时聊天
             </div>
-            <div class="user"></div>
+            <div class="user_info"></div>
+        </div>
+        <div class="list_tab">
+            <ul>
+                <li typ="user">好友聊天</li>
+                <li typ="group">群组聊天</li>
+            </ul>
+            <div style="clear:both"></div>
         </div>
 
-        <div class="users">
-            <h3>最近联系人</h3>
-            <ul></ul>
+        <div class="last">
+            <div class="user">
+                <h3>最近联系人</h3>
+                <ul></ul>
+            </div>
+            <div class="group">
+                <h3>最近群组</h3>
+                <ul></ul>
+            </div>
         </div>
 
         <div class="chat">

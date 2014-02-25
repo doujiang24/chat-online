@@ -16,6 +16,7 @@ local loader = get_instance().loader
 
 
 -- str: json
+-- return ok, data / err
 function recv(str)
     local ok, args = pcall(json_decode, str)
     if not ok then
@@ -27,61 +28,68 @@ function recv(str)
 
     local typ = args._t
     if "msg" == typ then
-        return send(args.acceptor, args.msg)
+        return send(args.acceptor, args.msg, args.typ)
 
     elseif "view" == typ then
-        return view(args.contact)
-
-    elseif "sign" == typ then
-        return sign(args.uid, args.client)
+        return view(args.contact, args.typ)
 
     elseif "list" == typ then
-        return list(args.contactor)
+        return list(args.contactor, args.typ)
 
     elseif "last" == typ then
-        return last()
+        return last(args.typ)
+
+    elseif "join" == typ then
+        return join(args.group)
 
     else
         return nil, "type not valid in json data"
     end
 end
 
-function send(acceptor, msg)
+function send(acceptor, msg, typ)
     local chat, user = loader:model('chat'), loader:model('ruser')
-    local sender = get_instance().session:get('sid')
-    local users = user:get({sender, acceptor})
-    local res, err = chat:send(sender, acceptor, msg, users[sender], users[acceptor])
-    chat:close()
+    local sender = get_instance().uid
 
-    return res, err
-end
+    local res, err
+    if typ and typ == "group" then
+        local group = loader:model('rgroup')
+        local groupname = group:get(acceptor)
+        group:close()
 
-function view(contact)
-    local chat = loader:model('chat')
-    local self = get_instance().session:get('sid')
-    local res, err = chat:view(contact, self)
-    chat:close()
+        local sender_username = user:get(sender)
 
-    return res, err
-end
-
-function sign(uid, client)
-    local dp = get_instance()
-
-    if not uid or not client then
-        return nil, "not login"
+        res, err = chat:groupsend(sender, acceptor, msg, sender_username, groupname)
+    else
+        local users = user:gets({sender, acceptor})
+        res, err = chat:send(sender, acceptor, msg, users[sender], users[acceptor])
     end
+    user:close()
+    chat:close()
 
-    dp.client = client
-    dp.uid = uid
-    return true
+    return res, err
 end
 
-function list(user)
+function view(contact, typ)
+    local uid = get_instance().uid
+    local chat = loader:model('chat')
+    local res, err = chat:view(contact, uid, typ)
+    chat:close()
+
+    return res, err
+end
+
+function list(user, typ)
     local chat = loader:model('mchat')
     local sid = get_instance().session:get('sid')
 
-    local data, err = chat:list(user, sid)
+    local data, err
+    if typ and "group" == typ then
+        data, err = chat:grouplist(user)
+
+    else
+        data, err = chat:list(user, sid)
+    end
     chat:close()
 
     if data then
@@ -102,25 +110,48 @@ function list(user)
     return "list", { uid = user, messages = data }
 end
 
-function last()
-    local chat = loader:model('rchat')
+function last(typ)
     local sid = get_instance().session:get('sid')
+    local rnames, get_contact_func
 
-    local data = chat:contact(sid, 20)
+    if "group" == typ then
+        get_contact_func = "groupcontact"
+        rnames = loader:model('rgroup')
+
+    else
+        get_contact_func = "contact"
+        rnames = loader:model('ruser')
+    end
+
+    local chat = loader:model('rchat')
+    local data = chat[get_contact_func](chat, sid, 20)
     chat:close()
 
     local uids = values(data, 'uid')
-
     if #uids > 0 then
-        local user = loader:model('ruser')
-        local usernames = user:get(uids)
-        user:close()
+        local usernames = rnames:gets(uids)
 
         for i, u in pairs(data) do
-            get_instance().debug:log_debug(i, u, usernames, u.uid)
             data[i].username = usernames[u.uid]
         end
     end
+    rnames:close()
 
-    return "last", data
+    return "last", { typ = typ or 'user', data = data }
+end
+
+function join(gid)
+    local uid = get_instance().uid
+
+    local group = loader:model('rgroup')
+    local res, err = group:join(uid, gid)
+    group:close()
+
+    if res then
+        local chat = loader:model('rchat')
+        chat:join(uid, gid)
+        chat:close()
+    end
+
+    return true
 end

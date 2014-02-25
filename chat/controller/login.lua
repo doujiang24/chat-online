@@ -42,7 +42,7 @@ function sign()
     group:close()
 
     local chat = loader:model('chat')
-    local res, err = chat:send(sid, default_group, default_mesg .. username, username, default_group_name)
+    local res, err = chat:groupsend(sid, default_group, default_mesg .. username, username, default_group_name)
     chat:close()
 
     get_instance().session:set('sid', sid)

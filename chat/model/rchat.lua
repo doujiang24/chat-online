@@ -21,6 +21,7 @@ local _M = getfenv()
 local config = get_instance().loader:config('redis')
 local channel_pref = config.channel_pref
 local contact_pref = config.contact_pref
+local group_contact_pref = config.group_contact_pref
 local unread_pref = config.unread_pref
 local online_user_list = config.online_user_list
 local subscribe_timeout = config.subscribe_timeout
@@ -44,6 +45,7 @@ end
 function publish(self, channel, data)
     local red = self.red
 
+    get_instance().debug:log_debug('group debug')
     return red:publish(channel_pref .. channel, json_encode(data))
 end
 
@@ -76,26 +78,80 @@ function send(self, id, sender, acceptor, message, sender_username, acceptor_use
     local res = red:commit_pipeline()
 
     -- unread
-    if str_sub(acceptor, 1, #group_pref) ~= group_pref then
-        unread(self, acceptor, sender, 'incr')
-    else
-        local group = get_instance().loader:model('rgroup')
-        local users = group:users(acceptor)
-        for i = 1, #users do
-            unread(self, users[i], acceptor, 'incr')
-        end
-    end
+    unread_incr(self, acceptor, sender)
 
     return res
 end
 
-function unread(self, master, contact, op)
-    local red, key = self.red, unread_pref .. master
-    if "incr" == op then
-        return red:hincrby(key, contact, 1)
-    elseif "clear" == op then
-        return red:hdel(key, contact)
+function join(self, uid, gid)
+    local red = self.red
+
+    local package = {
+        _t = "join",
+        group = gid,
+    }
+
+    return red:publish(channel_pref .. uid, json_encode(package))
+end
+
+function groupsend(self, id, sender, group, message, sender_username, groupname)
+    local red, now = self.red, time()
+
+    local package = {
+        _t = "msg",
+        data = {
+            id = id,
+            sender = sender,
+            acceptor = group,
+            message = message,
+            status = 1,
+            time = localtime(),
+            acceptor_username = groupname,
+            sender_username = sender_username,
+            typ = "group",
+        },
+    }
+    local data = json_encode(package)
+
+    get_instance().debug:log_debug('group debug', data)
+    -- send message
+    local res, err = red:publish(channel_pref .. group, data)
+
+    -- contact
+    local rgroup = get_instance().loader:model('rgroup')
+    local users = rgroup:users(group)
+    rgroup:close()
+
+    red:init_pipeline()
+    for i = 1, #users do
+        red:zadd(group_contact_pref .. users[i], now, group)
     end
+    red:commit_pipeline()
+
+    -- unread
+    unread_incr(self, users, group)
+    unread_clear(self, sender, group)
+
+    return res
+end
+
+function unread_incr(self, master, contact)
+    local red = self.red
+
+    if type(master) == "string" then
+        return red:hincrby(unread_pref .. master, contact, 1)
+    end
+
+    red:init_pipeline()
+    for i = 1, #master do
+        red:hincrby(unread_pref .. master[i], contact, 1)
+    end
+    return red:commit_pipeline()
+end
+
+function unread_clear(self, master, contact)
+    local red = self.red
+    return red:hdel(unread_pref .. master, contact)
 end
 
 function view(self, sender, acceptor)
@@ -111,40 +167,69 @@ function view(self, sender, acceptor)
     local data = json_encode(package)
 
     -- unread
-    unread(self, acceptor, sender, 'clear')
+    unread_clear(self, acceptor, sender)
 
     -- send message
     return red:publish(channel_pref .. acceptor, data)
 end
 
-function contact(self, user, num)
-    local red = self.red
+function unreadnum(self, uid, users)
+    local red, key = self.red, unread_pref .. uid
 
-    local users = red:zrevrange(contact_pref .. user, 0, num -1 or 9)
+    red:init_pipeline()
+    for _i, u in ipairs(users) do
+        red:hget(key, u)
+    end
+    local results = red:commit_pipeline()
+
+    local ret = {}
+    for i = 1, #users do
+        ret[users[i]] = results and results[i] and results[i] ~= ngx_null and tonumber(results[i]) or 0
+    end
+
+    return ret
+end
+
+function contact(self, uid, num)
+    local red, ret = self.red, {}
+
+    local users = red:zrevrange(contact_pref .. uid, 0, num -1 or 9)
 
     if users and users ~= ngx_null then
         local users_online = online(self, users)
 
-        red:init_pipeline()
-        for _i, u in ipairs(users) do
-            red:hget(unread_pref .. user, u)
-        end
-        local results = red:commit_pipeline()
+        local unread_num = unreadnum(self, uid, users)
 
-        local ret = {}
         for i, u in ipairs(users) do
             ret[#ret + 1] = {
                 uid = u,
                 online = users_online[u],
-                unread = results and results[i] and results[i] ~= ngx_null
-                    and tonumber(results[i]) or 0
+                unread = unread_num[u],
             }
         end
-
-        return ret
     end
 
-    return {}
+    return ret
+end
+
+function groupcontact(self, uid, num)
+    local red, ret = self.red, {}
+
+    local users = red:zrevrange(group_contact_pref .. uid, 0, num -1 or 9)
+
+    if users and users ~= ngx_null then
+        local unread_num = unreadnum(self, uid, users)
+
+        for i, u in ipairs(users) do
+            ret[#ret + 1] = {
+                uid = u,
+                online = true,
+                unread = unread_num[u],
+            }
+        end
+    end
+
+    return ret
 end
 
 function client_online(self, uid, client, status)

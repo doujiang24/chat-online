@@ -28,10 +28,24 @@ function send(self, sender, acceptor, message, sender_username, acceptor_usernam
     return nil, err
 end
 
-function view(self, sender, acceptor)
+function groupsend(self, sender, acceptor, message, sender_username, groupname)
     local mchat, rchat = self.mchat, self.rchat
 
-    mchat:view(sender, acceptor)
+    local id, err = mchat:send(sender, acceptor, message)
+
+    if id then
+        rchat:groupsend(id, sender, acceptor, message, sender_username, groupname)
+        return true
+    end
+    return nil, err
+end
+
+function view(self, sender, acceptor, typ)
+    local mchat, rchat = self.mchat, self.rchat
+
+    if "user" == typ then
+        mchat:view(sender, acceptor)
+    end
     return rchat:view(sender, acceptor)
 end
 

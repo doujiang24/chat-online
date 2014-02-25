@@ -39,14 +39,14 @@ function websocket()
     local groups = rgroup:groups(uid)
     rgroup:close()
 
-    local rchat = loader:model('rchat', uid, groups)
+    local rsubscribe = loader:model('rsubscribe', uid, groups)
 
     while true do
         local rcht = loader:model('rchat')
         rcht:client_online(uid, client)
         rcht:close()
 
-        local co = spawn(rchat.subscribe, rchat)
+        local co = spawn(rsubscribe.subscribe, rsubscribe)
 
         local recv_data = wb:recv()
 
@@ -64,17 +64,20 @@ function websocket()
             break
         end
 
-        local ok, data = wait(co)
+        local ok, data, err = wait(co)
         if not ok then
             log_error("failed to run thread", data)
-        end
 
-        if data then
+        elseif data then
             wb:send(data)
+
+        elseif err then
+            log_error("subscribe run err:", err)
+            wb:close()
         end
     end
 
-    rchat:close()
+    rsubscribe:close()
     wb:close()
 end
 
@@ -144,16 +147,16 @@ function back_hold(premature, uid, client, dp)
     local groups = rgroup:groups(uid)
     rgroup:close()
 
-    local rchat = loader:model('rchat', uid, groups)
+    local rsubscribe = loader:model('rsubscribe', uid, groups)
     while true do
-        local res, err = rchat:subscribe()
+        local res, err = rsubscribe:subscribe()
 
         if res then
             local rcht = loader:model('rchat')
             rcht:delay_message(uid, client, res)
             rcht:close()
 
-        elseif err ~= "timeout" then
+        elseif err then
             get_instance().debug:log_debug('check_hold, err:', err)
             break
         end
@@ -167,12 +170,14 @@ function back_hold(premature, uid, client, dp)
             break
         end
     end
-    rchat:close()
+    rsubscribe:close()
 end
 
 
 function send()
-    local request = get_instance().request
+    local dp = get_instance()
+    local request = dp.request
+    dp.uid = dp.session:get('sid')
 
     local get = request:get('data')
     local ok, data = chatlib.recv(get)

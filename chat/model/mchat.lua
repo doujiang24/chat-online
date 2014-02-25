@@ -45,13 +45,20 @@ end
 function list(self, id, another, limit, max_id)
     local db = self.db
 
-    if str_sub(id, 1, 5) == "group" then
-        db:where('acceptor', id)
-    else
-        local s1 = db:where('sender', id):where('acceptor', another):where_export()
-        local s2 = db:where('acceptor', id):where('sender', another):where_export()
-        db:where("((" .. s1 .. ") OR (" .. s2 .. "))", '', false)
+    local s1 = db:where('sender', id):where('acceptor', another):where_export()
+    local s2 = db:where('acceptor', id):where('sender', another):where_export()
+    db:where("((" .. s1 .. ") OR (" .. s2 .. "))", '', false)
+
+    if max_id then
+        db:where('`id` <', max_id)
     end
+
+    return db:limit(limit or 10):order_by('id', 'DESC'):get(db_table)
+end
+
+function grouplist(self, group, limit, max_id)
+    local db = self.db
+    db:where('acceptor', group)
 
     if max_id then
         db:where('`id` <', max_id)

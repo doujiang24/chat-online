@@ -5,6 +5,7 @@ local uuid = require "resty.uuid"
 
 local type = type
 local unpack = unpack
+local str_sub = string.sub
 local setmetatable = setmetatable
 
 
@@ -12,6 +13,7 @@ local _M = getfenv()
 
 local config = get_instance().loader:config('redis')
 local user_hash_list = config.user_hash_list
+local group_pref = config.group_pref
 
 function new(self)
     return setmetatable({

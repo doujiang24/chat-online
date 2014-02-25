@@ -1,9 +1,11 @@
 -- Copyright (C) 2013 MaMa
 
 local redis = require "database.redis"
+local cjson = require "cjson"
 
 local setmetatable = setmetatable
 local get_instance = get_instance
+local json_decode = cjson.decode
 local ngx_null = ngx.null
 local unpack = unpack
 
@@ -43,11 +45,35 @@ function subscribe(self, timeout)
     end
 
     local data, err = red:read_reply()
-    if data and data ~= ngx_null then
-        return data and data[3]
+    if data and data ~= ngx_null and "message" == data[1] then
+        local package = json_decode(data[3])
+        if package and package._t == "join" then
+            join(self, package.group)
+            return
+        end
+
+        return data[3]
     end
 
-    return nil, err
+    if err ~= "timeout" then
+        return nil, err
+    end
+end
+
+function join(self, gid)
+    local chs, key = self.chs, channel_pref .. gid
+
+    for _i, k in ipairs(chs) do
+        if k == key then
+            return
+        end
+    end
+
+    chs[#chs + 1] = key
+    self.groups[#self.groups + 1] = gid
+
+    get_instance().debug:log_debug('subscribe', key)
+    return self.red:subscribe(key)
 end
 
 function close(self)

@@ -50,6 +50,18 @@ function gets(self, groups)
     return ret
 end
 
+function all(self)
+    local red = self.red
+
+    local res, err = red:hgetall(group_name_hash)
+
+    if res and res ~= ngx_null then
+        return red:array_to_hash(res)
+    end
+
+    return {}, err
+end
+
 function users(self, group)
     local ret = self.red:smembers(group_user_pref .. group)
 
@@ -65,9 +77,12 @@ end
 function join(self, uid, group)
     local red = self.red
 
-    if red:sadd(group_user_pref .. group, uid) then
-        return red:sadd(user_group_pref .. uid, group)
-    end
+    red:multi()
+    red:sadd(group_user_pref .. group, uid)
+    red:sadd(user_group_pref .. uid, group)
+    local results, err = red:exec()
+
+    return results and 1 == results[1] or nil
 end
 
 function close(self)

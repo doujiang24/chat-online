@@ -38,6 +38,7 @@ var Server = {
             _log('不支持的 websocket, 启动长轮询');
             Server.longpoll();
             Server.contact();
+            Server.contact('group');
         } else {
             Server.ws = new WebSocket('ws://' + api_host + '/chat/websocket?uid=' + User.uid + "&client=" + User.client);
             Server.ws.onopen = function () {
@@ -45,6 +46,7 @@ var Server = {
                 Server.wb_support = true;
                 //Server.sign();
                 Server.contact();
+                Server.contact('group');
             };
             Server.ws.onerror = function (error) {
                 _log(error);
@@ -61,6 +63,7 @@ var Server = {
                     _log('不支持的 websocket, 启动长轮询');
                     Server.longpoll();
                     Server.contact();
+                    Server.contact('group');
                 }
             };
         }
@@ -72,12 +75,10 @@ var Server = {
             type: 'GET',
             url: host + '/chat/longpoll',
             data: {
-                client: User.client,
-                _t: (new Date()).valueOf()
+                client: User.client
             },
             dataType: 'jsonp',
             success: function (res) {
-                _log(res);
                 if (1 == res.status) {
                     Client.recieve(res.data);
                 } else if (-1 == res.status) {
@@ -87,34 +88,39 @@ var Server = {
             }
         });
     },
-    sign: function() {
+    send: function(text, acceptor) {
         var data = {
-            uid: User.uid,
-            client: User.client
-        };
-        this._send("sign", data);
-    },
-    send: function(text) {
-        var data = {
-            acceptor: Client.current_uid,
-            msg: text
+            msg: text,
+            acceptor: Client.current_contact,
+            typ: Database.type(acceptor)
         };
         this._send("msg", data);
     },
     history: function(uid) {
         var data = {
-            contactor: uid
+            contactor: uid,
+            typ: Database.type(uid)
         };
         this._send('list', data);
     },
-    contact: function () {
-        this._send("last", {});
+    contact: function (typ) {
+        var data = {
+            typ: typ || 'user'
+        };
+        this._send("last", data);
     },
     view: function (uid) {
         var data = {
-            contact: uid
+            contact: uid,
+            typ: Database.type(uid)
         };
         this._send('view', data);
+    },
+    join: function (gid) {
+        var data = {
+            group: gid
+        };
+        this._send('join', data);
     },
     _send: function(type, data) {
         data._t = type;
@@ -147,6 +153,7 @@ var Server = {
 
 var Database = {
     contact_users: {},
+    contact_groups: {},
     messages: {},
 
     add_user: function (uid, username, online, unread) {
@@ -157,15 +164,40 @@ var Database = {
         }
         return false;
     },
+    add_group: function (uid, username, unread) {
+        if (! this.contact_groups[uid]) {
+            this.contact_groups[uid] = { username: username, unread: unread || 0 };
+            this.messages[uid] = null;
+            return true;
+        }
+        return false;
+    },
+    type: function(uid) {
+        if (this.contact_users[uid]) {
+            return 'user';
+
+        } else if (this.contact_groups[uid]) {
+            return 'group';
+        }
+        return null;
+    },
+    username: function(uid) {
+        if (this.contact_users[uid]) {
+            return this.contact_users[uid].username;
+        }
+        return this.contact_groups[uid].username;
+    },
     unread: function (uid, unread) {
-        var current = this.contact_users[uid]['unread'] || 0;
+        var arr = this.type(uid) == "user" ? this.contact_users[uid] : this.contact_groups[uid];
+        var current = arr['unread'] || 0;
         var num = unread == "incr" ? current + 1 : unread;
 
-        this.contact_users[uid]['unread'] = num;
+        arr['unread'] = num;
         return { num: num, changed: current == num ? false : true };
     },
     online: function (uid, online) {
-        this.contact_users[uid]['online'] = online || false;
+        var arr = this.type(uid) == "user" ? this.contact_users[uid] : this.contact_groups[uid];
+        arr['online'] = online || false;
     },
     add_message: function(data) {
         var uid = data.acceptor === User.uid ? data.sender : data.acceptor;
@@ -183,6 +215,10 @@ var Database = {
 };
 
 var Client = {
+    current_contact: null,
+    current_group: null,
+    current_tab: 'user', // or 'group'
+    on: {},
     init: function() {
         _log('client init');
         if (Server.connect()) {
@@ -192,83 +228,118 @@ var Client = {
     bind: function() {
         $("form.publish").submit(function () {
             var text = $(".publish input").val();
-            Server.send(text);
+            Server.send(text, Client.current_contact);
             $(".publish input").val('');
             return false;
         });
     },
     unread: function (uid, num) {
-        var username = Database.contact_users[uid].username;
+        var username = Database.username(uid);
         var res = Database.unread(uid, num);
-        _log('database unread return:', res);
+        //_log('database unread return:', res);
+        var typ = Database.type(uid);
 
         if (res.num > 0) {
-            $(".users li[uid=" + uid + "]").html(username + "(" + res.num + ")");
+            $("." + typ + " li[uid='" + uid + "']").html(username + "(" + res.num + ")");
         } else {
-            $(".users li[uid=" + uid + "]").html(username);
+            $("." + typ + " li[uid='" + uid + "']").html(username);
         }
+        this.unread_tab();
         return res.changed;
     },
+    unread_tab: function() {
+        var num = 0;
+        $.each(Database.contact_users, function(uid, data) {
+            num += (data.unread ? data.unread : 0);
+        });
+        $(".list_tab li[typ=user]").html("好友聊天" + (num == 0 ? "" : "(" + num + ")"));
+
+        num = 0;
+        $.each(Database.contact_groups, function(uid, data) {
+            num += (data.unread ? data.unread : 0);
+        });
+        $(".list_tab li[typ=group]").html("群组聊天" + (num == 0 ? "" : "(" + num + ")"));
+    },
     online: function (uid, online) {
+        var typ = Database.type(uid);
         if (online) {
-            $(".users li[uid=" + uid + "]").addClass('online');
+            $("." + typ + " li[uid='" + uid + "']").addClass('online');
             Database.online(uid, true);
         } else {
-            $(".users li[uid=" + uid + "]").removeClass('online');
+            $("." + typ + " li[uid='" + uid + "']").removeClass('online');
             Database.online(uid, false);
         }
     },
     add_user: function (uid, username, online, unread) {
-        if (Database.add_user(uid, username, online, unread)) {
-            $(".users ul").prepend("<li uid='" + uid + "'>" + username + "</li>");
-            $(".users li:first").click(function (e) {
+        if (Database.type(uid) != null) { return; }
+
+        if ("group" == online) {
+            if (Database.add_group(uid, username, unread)) {
+                $(".group ul").prepend("<li uid='" + uid + "'>" + username + "</li>");
+                $(".group li:first").click(function (e) {
+                    Client.show($(e.target).attr('uid'));
+                });
+                this.unread(uid, unread);
+                this.online(uid, true);
+                return true;
+            }
+        } else if (Database.add_user(uid, username, online, unread)) {
+            $(".user ul").prepend("<li uid='" + uid + "'>" + username + "</li>");
+            $(".user li:first").click(function (e) {
                 Client.show($(e.target).attr('uid'));
             });
             this.online(uid, online);
             this.unread(uid, unread);
+            return true;
         }
     },
-    add_message: function (data) {
+    add_message: function (data, is_history) {
+        var typ = data.typ == "group" ? data.typ : null;
         if (data.acceptor == User.uid) {
-            this.add_user(data.sender, data.sender_username, true, 1);
+            this.add_user(data.sender, data.sender_username, typ || true, 1);
         } else {
-            this.add_user(data.acceptor, data.acceptor_username, undefined, 0);
+            this.add_user(data.acceptor, data.acceptor_username, typ || undefined, 0);
         }
 
         var uid = null;
         if ( uid = Database.add_message(data) ) {
             //_log("client add message", data);
-            _log(uid);
-            if (this.current_uid == uid) {
-                this.show(this.current_uid);
-
-            } else if (data.sender != User.uid) {
+            //_log(uid);
+            if (data.sender != User.uid && !is_history) {
                 this.unread(uid, 'incr');
+            }
+
+            if (this.current_contact == uid) {
+                this.show(this.current_contact);
             }
         }
     },
     history: function (data) {
         if (data.messages.length > 0) {
             $.each(data.messages, function (_k, m) {
-                Client.add_message(m);
+                Client.add_message(m, true);
             });
 
         } else {
             Database.messages[data.uid] = {};
         }
 
-        if (this.current_uid) {
+        if (this.current_contact) {
             this.show(data.uid);
         }
     },
-    contact: function (data) {
+    contact: function (res) {
         _log('contact');
-        $.each($.isArray(data) ? data.reverse() : [], function(_i, u) {
-            Client.add_user(u.uid, u.username, u.online, u.unread);
-        });
-        _log(data);
+        var typ = res.typ, data = res.data;
 
-        var uid = $(".users li:first").attr('uid');
+        $.each($.isArray(data) ? data.reverse() : [], function(_i, u) {
+            Client.add_user(u.uid, u.username, typ == "group" ? typ : u.online, u.unread);
+        });
+
+        var uid = $("." + typ + " li:first").attr('uid');
+        this.on[typ] = uid;
+
+        //_log(typ, uid);
         if (uid) {
             this.show(uid);
         }
@@ -288,7 +359,7 @@ var Client = {
             this.contact(data);
 
         } else if (res._t == "view") {
-            _log("view recv", data);
+            //_log("view recv", data);
             if (data.sender == User.uid) {
                 this.unread(data.acceptor, 0);
             } else {
@@ -296,36 +367,50 @@ var Client = {
             }
         }
     },
-    chat: function(uid, username) {
+    chat: function(uid, username, typ) {
         this.init();
-        this.add_user(uid, username, true);
+        var newer = this.add_user(uid, username, typ == "group" ? typ : true);
 
-        if (Database.add_user(uid, username, true)) {
-            $(".users ul").prepend("<li uid='" + uid + "'>" + username + "</li>");
-            $(".users li:first").click(function (e) {
-                this.show($(e.target).attr('uid'));
-            });
+        if (typ == "group" && newer) {
+            Server.join(uid);
         }
 
         this.show(uid);
     },
+    change_tab: function(typ) {
+        if (typ != this.current_tab) {
+            var another = typ == "group" ? "user" : "group";
+            $("." + typ).show();
+            $("." + another).hide();
+
+            this.current_tab = typ;
+
+            $(".list_tab li").removeClass('on');
+            $(".list_tab li[typ='" + typ + "']").addClass('on');
+        }
+    },
     show: function(uid) {
-        if (this.current_uid != uid) {
-            _log('show uid:' + uid);
+        var typ = Database.type(uid);
+        this.change_tab(typ);
 
-            $(".users li.on").removeClass('on');
-            $(".users li[uid=" + uid + "]").addClass('on');
+        this.current_tab = typ;
 
-            this.current_uid = uid;
+        //_log('show uid:' + uid);
 
-            if (this.unread(uid, 0)) {
-                _log('view', uid);
-                Server.view(uid);
-            }
+        $("." + typ + " li.on").removeClass('on');
+        $("." + typ + " li[uid='" + uid + "']").addClass('on');
+
+        this.on[typ] = uid;
+        this.current_contact = uid;
+
+        if (this.unread(uid, 0)) {
+            //_log('view', uid);
+            Server.view(uid);
         }
 
         if (Database.messages[uid]) {
             $(".messages").html(this.message_html(uid));
+            $(".messages").scrollTop($(".messages")[0].scrollHeight);
         } else {
             Server.history(uid);
         }
@@ -390,7 +475,7 @@ var User = {
         });
     },
     need_sign: function () {
-        $(".user").html("<form id='user_sign'><input name='username' id='username'><input type='submit' value='登录'></form>");
+        $(".user_info").html("<form id='user_sign'><input name='username' id='username'><input type='submit' value='登录'></form>");
         $("#user_sign").submit(function () {
             User.sign();
             return false;
@@ -400,11 +485,12 @@ var User = {
         User.uid = sid;
         User.username = username;
         User.client = client;
-        $(".user").html("<p>欢迎, " + username + "</p>");
+        $(".user_info").html("<p>欢迎, " + username + "</p>");
     }
 }
 
 $(document).ready(function () {
+    // online users
     $.ajax({
         type: 'GET',
         url: host + '/chat/onall',
@@ -426,8 +512,70 @@ $(document).ready(function () {
             });
         }
     });
+
+    // all groups
+    $.ajax({
+        type: 'GET',
+        url: host + '/group/all',
+        dataType: 'jsonp',
+        success: function (res) {
+            var html = '';
+            if (1 == res.status) {
+                $.each(res.data, function (uid, username) {
+                    html += "<span uid='" + uid + "'>" + username + "</span>";
+                });
+            }
+            $(".groups div").html(html);
+
+            $(".groups span").click(function (e) {
+                var uid = $(e.target).attr("uid");
+                var username = $(e.target).html();
+
+                Client.chat(uid, username, 'group');
+            });
+        }
+    });
+
+    $("#groupadd").submit(function () {
+        var name = $("#groupadd input[name=groupname]").val();
+        if ( !name || name.length == 0) {
+            alert('请输入群组名称');
+            return false;
+        }
+        $.ajax({
+            type: 'GET',
+            url: host + '/group/add',
+            data: {
+                name: name
+            },
+            dataType: 'jsonp',
+            success: function (res) {
+                if (1 == res.status) {
+                    var html = "<span uid='" + res.data.gid + "'>" + res.data.name + "</span>";
+                    $(".groups div").append(html);
+                }
+
+                $(".groups span:last").click(function (e) {
+                    var uid = $(e.target).attr("uid");
+                    var username = $(e.target).html();
+
+                    Client.chat(uid, username, 'group');
+                });
+                $("#groupadd input[name=groupname]").val('');
+            }
+        });
+        return false;
+    });
 });
 
 
+$(".list_tab li").click(function () {
+    var typ = $(this).attr('typ');
+    Client.change_tab(typ);
+
+    if (Client.on[typ]) {
+        Client.show(Client.on[typ]);
+    }
+});
 
 User.login();
