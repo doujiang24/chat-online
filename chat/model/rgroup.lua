@@ -13,6 +13,7 @@ local _M = getfenv()
 local config = get_instance().loader:config('redis')
 local group_pref = config.group_pref
 local group_name_hash = config.group_name_hash
+local group_name_count = config.group_name_count
 local group_user_pref = config.group_user_pref
 local user_group_pref = config.user_group_pref
 
@@ -25,7 +26,7 @@ end
 function add(self, name)
     local red = self.red
 
-    local id = red:hincrby(group_name_hash, 'count', 1)
+    local id = red:incr(group_name_count)
     local key = group_pref .. id
     red:hset(group_name_hash, key, name)
 

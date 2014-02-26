@@ -33,6 +33,7 @@ user_hash_list = "user_lists"
 
 -- groups
 group_pref =    "group:"    -- group    pref:uid gid    sets
+group_name_count    =   "group_count"   -- group count  string  incr
 group_name_hash     =   "group_name"    -- groupname    hash
 group_user_pref     =   "gusr:"         -- group user   sets
 user_group_pref     =   "ugrp:"         -- user group   sets
