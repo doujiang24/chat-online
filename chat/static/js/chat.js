@@ -424,7 +424,7 @@ var Client = {
 
             if (data.sender != User.uid) {
                 myself = "";
-                username = data.sender_username || Database.contact_users[data.sender].username;
+                username = data.sender_username != undefined ? data.sender_username : Database.contact_users[data.sender].username;
             }
 
             html += "<div class='" + myself + "'><p><span class='u'>" +
