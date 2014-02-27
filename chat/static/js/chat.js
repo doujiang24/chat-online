@@ -417,7 +417,7 @@ var Client = {
     },
     message_html: function (uid) {
         var html = '';
-        $.each(Object.keys(Database.messages[uid]).sort(), function (i, id) {
+        $.each(Object.keys(Database.messages[uid]), function (i, id) {
             var data = Database.messages[uid][id];
             var time = data.time, msg = data.message,
                 myself = 'self', username = '我';
