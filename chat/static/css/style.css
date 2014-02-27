@@ -3,7 +3,7 @@
 body { width:1220px; margin:0 auto; }
 p, form, ul, li { margin:0 }
 
-.notice { width:800px; margin:20px auto; line-height:1.8em; }
+.notice { width:800px; margin:20px auto 0; line-height:1.8em; }
 .onlines, .groups { border:1px solid #CCC; padding:10px 20px; margin-bottom:20px; }
 .onlines span, .groups span { display:inline-block; height:40px; line-height:40px; margin:0 10px; font-weight:bold; color:green; cursor:pointer; }
 .left { float:left; width:250px; margin:40px 80px; }

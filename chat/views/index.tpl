@@ -14,6 +14,7 @@
         <p> 随意选择用户名输入即可登录聊天 </p>
         <p> 选择左侧在线用户即可开始聊天 </p>
         <p> 支持群聊，登录后会自动加入默认群 </p>
+        <p> 源码地址：<a target="_blank" href="https://github.com/doujiang24/chat-online">https://github.com/doujiang24/chat-online</a>  </p>
     </div>
 
     <div class="left">
