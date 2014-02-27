@@ -244,9 +244,11 @@ function client_offline(self, uid, client)
 
     red:hdel(hkey, client)
 
+    local online = nil
+
     local clients = red:hgetall(hkey)
     if clients and clients ~= ngx_null then
-        local online, deadline = false, now - longpoll_timeout - max_network_delay
+        local deadline = now - longpoll_timeout - max_network_delay
         for i = 1, #clients, 2 do
             if tonumber(clients[i + 1]) < deadline then
                 red:hdel(hkey, clients[i])
@@ -254,10 +256,10 @@ function client_offline(self, uid, client)
                 online = true
             end
         end
+    end
 
-        if not online then
-            red:zrem(online_user_list, uid)
-        end
+    if not online then
+        red:zrem(online_user_list, uid)
     end
 end
 
